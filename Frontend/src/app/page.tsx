@@ -340,40 +340,50 @@ export default function SignalDashboard() {
                 </div>
               </div>
               
-              <div className="chat-area">
-                <div className="chat-profile-banner">
-                  <div className="avatar" style={{background: '#fca5a5'}}>
-                    {activeChat.initial}
+              <div className="chat-area" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  <div className="chat-profile-banner">
+                    <div className="avatar" style={{background: '#60a5fa'}}>
+                      {activeChat.initial}
+                    </div>
+                    <div className="chat-profile-name">{activeChat.name} &gt;</div>
+                    <div className="chat-profile-badges">
+                      <div className="chat-badge">
+                        <User size={16} /> Name not verified
+                      </div>
+                      <div className="chat-badge-secondary">
+                        <User size={14} /> No groups in common
+                      </div>
+                    </div>
                   </div>
-                  <div className="chat-profile-name">{activeChat.name} &gt;</div>
-                  <div className="chat-profile-badges">
-                    <div className="chat-badge">
-                      <User size={16} /> Name not verified
-                    </div>
-                    <div className="chat-badge-secondary">
-                      <User size={14} /> No groups in common
-                    </div>
+
+                  <div className="message-list" style={{ display: 'flex', flexDirection: 'column', minHeight: '300px' }}>
+                    {activeChat.messages && activeChat.messages.length > 0 ? (
+                      <>
+                        <div className="message-divider">
+                          <span>1 Unread Message</span>
+                        </div>
+                        <div className="message-date">Today</div>
+                        {activeChat.messages.map((msg: any, idx: number) => (
+                          <div key={idx} className={`message-bubble ${msg.out ? 'out' : ''}`} style={{display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '0.5rem'}}>
+                            <span>{msg.text}</span>
+                            <span style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>{msg.time || 'Now'}</span>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: 'var(--text-secondary)', margin: 'auto' }}>
+                        <p>No messages yet.</p>
+                        <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>Send a message to start the conversation.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="message-list">
-                  <div className="message-divider">
-                    <span>1 Unread Message</span>
-                  </div>
-                  <div className="message-date">Today</div>
-                  
-                  <div className="message-bubble" style={{display: 'flex', gap: '1rem', alignItems: 'flex-end'}}>
-                    <span>Hi</span>
-                    <span style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>Now</span>
-                  </div>
-                </div>
-
-                <div className="message-actions">
-                  <div className="message-request-text">
-                    <MessageCircle size={16} />
-                    You accepted {activeChat.name}'s message request
-                  </div>
-                  <button className="block-report-btn">Block or Report...</button>
+                <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
+                  <button style={{ color: 'var(--text-secondary)' }}><User size={20} /></button>
+                  <input type="text" placeholder="Send a message..." style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }} />
+                  <button style={{ color: 'var(--text-secondary)' }}><Phone size={20} /></button>
                 </div>
               </div>
             </>
