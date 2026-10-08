@@ -31,8 +31,12 @@ class ProfileUpdateRequest(BaseModel):
     username: Optional[str] = None
 
 class FirstMessageRequest(BaseModel):
-    target_user_id: int
+    target_user_id: str
     text: str
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    member_ids: list[int]
 
 class Token(BaseModel):
     access_token: str
@@ -153,56 +157,99 @@ async def send_ws_notification(target_user_id: int, payload: dict):
 
 @router.post("/message/first")
 def send_first_message(req: FirstMessageRequest, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if req.target_user_id == current_user.id:
+    if str(req.target_user_id) == str(current_user.id):
         raise HTTPException(status_code=400, detail="Cannot send message to yourself")
     
-    # Verify the target user exists
-    target_user = db.query(models.User).filter(models.User.id == req.target_user_id).first()
+    if str(req.target_user_id).startswith("group_"):
+        conv_id = int(str(req.target_user_id).replace("group_", ""))
+        try:
+            message = models.Message(sender_id=current_user.id, conversation_id=conv_id, text=req.text)
+            db.add(message)
+            db.flush()
+            
+            members = db.query(models.ConversationParticipant).filter(models.ConversationParticipant.conversation_id == conv_id).all()
+            for m in members:
+                if m.user_id != current_user.id:
+                    db.add(models.MessageReceipt(message_id=message.id, user_id=m.user_id, status="sent"))
+            db.commit()
+            
+            payload = {
+                "type": "new_message",
+                "message": {
+                    "id": message.id,
+                    "text": message.text,
+                    "sender_id": current_user.id,
+                    "chat_id": f"group_{conv_id}",
+                    "conversation_id": conv_id,
+                    "sender_name": current_user.display_name or current_user.username
+                }
+            }
+            for m in members:
+                if m.user_id != current_user.id:
+                    background_tasks.add_task(send_ws_notification, m.user_id, payload)
+                    
+            return {"message": "Message sent", "conversation_id": conv_id, "message_id": message.id}
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Existing 1-on-1 logic
+    target_user = db.query(models.User).filter(models.User.id == int(req.target_user_id)).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="Target user not found")
         
     try:
-        # 1. CONTACT: Insert a row in the Contact table mapping current user to target user
-        contact = models.Contact(user_id=current_user.id, contact_user_id=target_user.id)
-        db.add(contact)
+        user1_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == current_user.id).all())
+        user2_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == target_user.id).all())
         
-        # 2. CONVERSATION: Create a new Conversation record
-        conversation = models.Conversation(is_group=False)
-        db.add(conversation)
-        db.flush() # Flush to get the generated conversation.id
+        shared_convs = user1_convs.intersection(user2_convs)
         
-        # 3. CONVERSATION_PARTICIPANT: Insert two participant records
-        part1 = models.ConversationParticipant(user_id=current_user.id, conversation_id=conversation.id, role="member")
-        part2 = models.ConversationParticipant(user_id=target_user.id, conversation_id=conversation.id, role="member")
-        db.add(part1)
-        db.add(part2)
-        
-        # 4. MESSAGE: Create the actual Message record
-        message = models.Message(sender_id=current_user.id, conversation_id=conversation.id, text=req.text)
+        conv_id = None
+        for cid in shared_convs:
+            c = db.query(models.Conversation).filter(models.Conversation.id == cid).first()
+            if c and not c.is_group:
+                conv_id = cid
+                break
+                
+        if not conv_id:
+            contact = db.query(models.Contact).filter(models.Contact.user_id==current_user.id, models.Contact.contact_user_id==target_user.id).first()
+            if not contact:
+                contact = models.Contact(user_id=current_user.id, contact_user_id=target_user.id)
+                db.add(contact)
+            
+            conversation = models.Conversation(is_group=False)
+            db.add(conversation)
+            db.flush()
+            conv_id = conversation.id
+            
+            part1 = models.ConversationParticipant(user_id=current_user.id, conversation_id=conv_id, role="member")
+            part2 = models.ConversationParticipant(user_id=target_user.id, conversation_id=conv_id, role="member")
+            db.add(part1)
+            db.add(part2)
+            
+        message = models.Message(sender_id=current_user.id, conversation_id=conv_id, text=req.text)
         db.add(message)
-        db.flush() # Flush to get the generated message.id
+        db.flush()
         
-        # 5. MESSAGE_RECEIPT: Create a MessageReceipt record for the TARGET user
         receipt = models.MessageReceipt(message_id=message.id, user_id=target_user.id, status="sent")
         db.add(receipt)
         
-        # Commit the transaction if all steps succeeded
         db.commit()
         
-        # Dispatch websocket notification
         payload = {
             "type": "new_message",
             "message": {
                 "id": message.id,
                 "text": message.text,
                 "sender_id": current_user.id,
-                "conversation_id": conversation.id,
+                "chat_id": str(current_user.id),
+                "conversation_id": conv_id,
                 "sender_name": current_user.display_name or current_user.username
             }
         }
         background_tasks.add_task(send_ws_notification, target_user.id, payload)
         
-        return {"message": "First message sent successfully", "conversation_id": conversation.id, "message_id": message.id}
+        return {"message": "Message sent successfully", "conversation_id": conv_id, "message_id": message.id}
         
     except Exception as e:
         # 6. ERROR HANDLING: Rollback the transaction on failure
@@ -220,8 +267,14 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
     
     for p in user_participations:
         conversation = p.conversation
+        if not conversation:
+            continue
+            
+        last_msg = db.query(models.Message).filter(
+            models.Message.conversation_id == conversation.id
+        ).order_by(models.Message.created_at.desc()).first()
+
         if not conversation.is_group:
-            # Find the other participant
             other_p = db.query(models.ConversationParticipant).filter(
                 models.ConversationParticipant.conversation_id == conversation.id,
                 models.ConversationParticipant.user_id != current_user.id
@@ -229,14 +282,10 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
             
             if other_p:
                 other_user = other_p.user
+                chat_id = str(other_user.id)
                 
-                # Get the latest message for THIS conversation
-                last_msg = db.query(models.Message).filter(
-                    models.Message.conversation_id == conversation.id
-                ).order_by(models.Message.created_at.desc()).first()
-                
-                if other_user.id not in chats_dict:
-                    chats_dict[other_user.id] = {
+                if chat_id not in chats_dict:
+                    chats_dict[chat_id] = {
                         "id": other_user.id,
                         "conversation_id": conversation.id,
                         "name": other_user.display_name or other_user.username or "Unknown",
@@ -247,14 +296,34 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                         "_last_msg_obj": last_msg
                     }
                 else:
-                    # Update if this conversation has a newer message
-                    existing_msg = chats_dict[other_user.id]["_last_msg_obj"]
+                    existing_msg = chats_dict[chat_id]["_last_msg_obj"]
                     if last_msg:
                         if not existing_msg or last_msg.created_at > existing_msg.created_at:
-                            chats_dict[other_user.id]["last_message"] = last_msg.text
-                            chats_dict[other_user.id]["last_message_time"] = last_msg.created_at.strftime("%H:%M")
-                            chats_dict[other_user.id]["_last_msg_obj"] = last_msg
-                            chats_dict[other_user.id]["conversation_id"] = conversation.id
+                            chats_dict[chat_id]["last_message"] = last_msg.text
+                            chats_dict[chat_id]["last_message_time"] = last_msg.created_at.strftime("%H:%M")
+                            chats_dict[chat_id]["_last_msg_obj"] = last_msg
+                            chats_dict[chat_id]["conversation_id"] = conversation.id
+        else:
+            chat_id = f"group_{conversation.id}"
+            if chat_id not in chats_dict:
+                chats_dict[chat_id] = {
+                    "id": chat_id,
+                    "is_group": True,
+                    "conversation_id": conversation.id,
+                    "name": conversation.name or "Group",
+                    "initial": (conversation.name or "?")[0].upper(),
+                    "avatar_url": None,
+                    "last_message": last_msg.text if last_msg else None,
+                    "last_message_time": last_msg.created_at.strftime("%H:%M") if last_msg else None,
+                    "_last_msg_obj": last_msg
+                }
+            else:
+                existing_msg = chats_dict[chat_id]["_last_msg_obj"]
+                if last_msg:
+                    if not existing_msg or last_msg.created_at > existing_msg.created_at:
+                        chats_dict[chat_id]["last_message"] = last_msg.text
+                        chats_dict[chat_id]["last_message_time"] = last_msg.created_at.strftime("%H:%M")
+                        chats_dict[chat_id]["_last_msg_obj"] = last_msg
                             
     # Clean up and sort by time
     final_chats = []
@@ -266,13 +335,23 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
     
     return final_chats
 
-@router.get("/messages/{target_user_id}")
-def get_conversation_messages(target_user_id: int, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Find all conversations shared by current_user and target_user
-    user1_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == current_user.id).all())
-    user2_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == target_user_id).all())
-    
-    shared_convs = user1_convs.intersection(user2_convs)
+@router.get("/messages/{chat_id}")
+def get_conversation_messages(chat_id: str, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if chat_id.startswith("group_"):
+        conv_id = int(chat_id.replace("group_", ""))
+        shared_convs = {conv_id}
+        # Check participation
+        participant = db.query(models.ConversationParticipant).filter(
+            models.ConversationParticipant.conversation_id == conv_id,
+            models.ConversationParticipant.user_id == current_user.id
+        ).first()
+        if not participant:
+            return []
+    else:
+        target_user_id = int(chat_id)
+        user1_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == current_user.id).all())
+        user2_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == target_user_id).all())
+        shared_convs = user1_convs.intersection(user2_convs)
     
     if not shared_convs:
         return []
@@ -282,17 +361,25 @@ def get_conversation_messages(target_user_id: int, background_tasks: BackgroundT
     ).order_by(models.Message.created_at.asc()).all()
     
     # Mark unread messages as read
-    unread_receipts = db.query(models.MessageReceipt).join(models.Message).filter(
-        models.Message.conversation_id.in_(shared_convs),
-        models.Message.sender_id == target_user_id,
-        models.MessageReceipt.user_id == current_user.id,
-        models.MessageReceipt.status != "read"
-    ).all()
+    if chat_id.startswith("group_"):
+        unread_receipts = db.query(models.MessageReceipt).join(models.Message).filter(
+            models.Message.conversation_id.in_(shared_convs),
+            models.Message.sender_id != current_user.id,
+            models.MessageReceipt.user_id == current_user.id,
+            models.MessageReceipt.status != "read"
+        ).all()
+    else:
+        unread_receipts = db.query(models.MessageReceipt).join(models.Message).filter(
+            models.Message.conversation_id.in_(shared_convs),
+            models.Message.sender_id == target_user_id,
+            models.MessageReceipt.user_id == current_user.id,
+            models.MessageReceipt.status != "read"
+        ).all()
     
     if unread_receipts:
         for r in unread_receipts:
             r.status = "read"
-            background_tasks.add_task(send_ws_notification, target_user_id, {
+            background_tasks.add_task(send_ws_notification, r.message.sender_id, {
                 "type": "receipt_update",
                 "message_id": r.message_id,
                 "status": "read"
@@ -304,8 +391,33 @@ def get_conversation_messages(target_user_id: int, background_tasks: BackgroundT
             "id": m.id,
             "text": m.text,
             "sender_id": m.sender_id,
-            "out": m.sender_id == current_user.id,
+            "sender_name": m.sender.display_name or m.sender.username if m.sender else None,
+            "out": m.sender_id == current_user.id if m.sender_id else False,
             "time": m.created_at.strftime("%H:%M"),
             "status": m.receipts[0].status if m.receipts else "sent"
         } for m in messages
     ]
+
+@router.post("/group")
+def create_group(req: CreateGroupRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Group name required")
+    try:
+        conversation = models.Conversation(is_group=True, name=req.name.strip())
+        db.add(conversation)
+        db.flush()
+        
+        db.add(models.ConversationParticipant(user_id=current_user.id, conversation_id=conversation.id, role="admin"))
+        for m_id in set(req.member_ids):
+            if m_id != current_user.id:
+                db.add(models.ConversationParticipant(user_id=m_id, conversation_id=conversation.id, role="member"))
+                
+        msg = models.Message(sender_id=None, conversation_id=conversation.id, text=f"You created the group.")
+        db.add(msg)
+        db.flush()
+        
+        db.commit()
+        return {"conversation_id": f"group_{conversation.id}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

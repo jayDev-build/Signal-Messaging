@@ -28,14 +28,20 @@ import {
   ArrowLeft,
   Users,
   AtSign,
-  Hash
+  Hash,
+  Camera,
+  ChevronDown
 } from "lucide-react";
 
 export default function SignalDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"chats" | "settings">("chats");
-  const [sidebarView, setSidebarView] = useState<"chats" | "new_chat">("chats");
+  const [sidebarView, setSidebarView] = useState<"chats" | "new_chat" | "choose_members" | "name_group">("chats");
+
+  // Group State
+  const [selectedMembers, setSelectedMembers] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState("");
 
   // Settings State
   const [displayName, setDisplayName] = useState("");
@@ -142,7 +148,8 @@ export default function SignalDashboard() {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "new_message") {
-            const isChatActive = activeChatIdRef.current === data.message.sender_id;
+            const chatId = data.message.chat_id || data.message.sender_id;
+            const isChatActive = activeChatIdRef.current === chatId;
             
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({
@@ -153,8 +160,15 @@ export default function SignalDashboard() {
             }
 
             setActiveChat((prev: any) => {
-              if (prev && prev.id === data.message.sender_id) {
-                const newMsg = { id: data.message.id, text: data.message.text, out: false, time: "Just now", status: "read" };
+              if (prev && prev.id === chatId) {
+                const newMsg = { 
+                  id: data.message.id, 
+                  text: data.message.text, 
+                  out: false, 
+                  time: "Just now", 
+                  status: "read",
+                  sender_name: data.message.sender_name 
+                };
                 return {
                   ...prev,
                   messages: prev.messages ? [...prev.messages, newMsg] : [newMsg]
@@ -164,7 +178,7 @@ export default function SignalDashboard() {
             });
 
             setChats((prevChats: any[]) => {
-              const chatIndex = prevChats.findIndex(c => c.id === data.message.sender_id);
+              const chatIndex = prevChats.findIndex(c => c.id === chatId);
               if (chatIndex !== -1) {
                 const updatedChat = {
                   ...prevChats[chatIndex],
@@ -301,6 +315,36 @@ export default function SignalDashboard() {
       alert("An error occurred while saving.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || selectedMembers.length === 0) return;
+    setSendingMsg(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://127.0.0.1:8000/auth/group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ name: groupName.trim(), member_ids: selectedMembers.map(m => m.id) })
+      });
+      if (!res.ok) throw new Error("Failed to create group");
+      
+      setGroupName("");
+      setSelectedMembers([]);
+      setSidebarView("chats");
+      
+      const chatsRes = await fetch("http://127.0.0.1:8000/auth/chats", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (chatsRes.ok) {
+        setChats(await chatsRes.json());
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error creating group");
+    } finally {
+      setSendingMsg(false);
     }
   };
 
@@ -512,7 +556,7 @@ export default function SignalDashboard() {
               {!searchQuery || searchQuery.length < 2 ? (
                 <>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <div className="chat-list-item" style={{ padding: '0.75rem 1rem' }}>
+                    <div className="chat-list-item" style={{ padding: '0.75rem 1rem' }} onClick={() => { setSelectedMembers([]); setSearchQuery(""); setSidebarView("choose_members"); }}>
                       <div className="avatar" style={{ background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', width: 40, height: 40 }}>
                         <Users size={18} />
                       </div>
@@ -594,6 +638,127 @@ export default function SignalDashboard() {
               )}
             </div>
           </>
+        ) : view === "chats" && sidebarView === "choose_members" ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div className="sidebar-header" style={{ justifyContent: 'flex-start', gap: '1.5rem', padding: '1.25rem 1rem' }}>
+              <button onClick={() => { setSidebarView("new_chat"); setSearchQuery(""); }} style={{ color: 'var(--text-secondary)' }}>
+                <ArrowLeft size={20} strokeWidth={2} />
+              </button>
+              <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>Choose members</span>
+              <button 
+                onClick={() => setSidebarView("name_group")}
+                disabled={selectedMembers.length === 0}
+                style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: selectedMembers.length > 0 ? '#60a5fa' : 'var(--text-secondary)', fontWeight: 600, cursor: selectedMembers.length > 0 ? 'pointer' : 'not-allowed' }}
+              >
+                Next
+              </button>
+            </div>
+
+            <div className="search-container" style={{ padding: '0 1rem 1rem' }}>
+              <div className="search-input-wrapper">
+                <Search size={16} color="var(--text-secondary)" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Name, username, or number"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <div style={{ padding: '1rem', color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 600 }}>
+                Contacts
+              </div>
+              {chats.filter(c => !c.is_group).map(contact => (
+                <div
+                  key={contact.id}
+                  className="chat-list-item"
+                  onClick={() => {
+                    setSelectedMembers(prev => 
+                      prev.some(m => m.id === contact.id) 
+                        ? prev.filter(m => m.id !== contact.id)
+                        : [...prev, contact]
+                    );
+                  }}
+                  style={{ paddingRight: '1.5rem' }}
+                >
+                  <div className="avatar" style={{ background: '#60a5fa', width: 40, height: 40 }}>
+                    {contact.avatar_url ? <img src={contact.avatar_url} alt="Avatar" /> : contact.initial}
+                  </div>
+                  <div className="chat-info">
+                    <span className="chat-name" style={{ fontWeight: 500 }}>{contact.name}</span>
+                  </div>
+                  <div style={{ 
+                    width: 20, height: 20, borderRadius: '50%', border: '2px solid var(--text-secondary)', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: selectedMembers.some(m => m.id === contact.id) ? '#60a5fa' : 'transparent',
+                    borderColor: selectedMembers.some(m => m.id === contact.id) ? '#60a5fa' : 'var(--text-secondary)'
+                  }}>
+                    {selectedMembers.some(m => m.id === contact.id) && <Check size={14} color="#fff" strokeWidth={3} />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : view === "chats" && sidebarView === "name_group" ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div className="sidebar-header" style={{ justifyContent: 'flex-start', gap: '1.5rem', padding: '1.25rem 1rem' }}>
+              <button onClick={() => setSidebarView("choose_members")} style={{ color: 'var(--text-secondary)' }}>
+                <ArrowLeft size={20} strokeWidth={2} />
+              </button>
+              <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>Name this group</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem 1rem' }}>
+              <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '1.5rem' }}>
+                <Users size={40} color="#8b5cf6" />
+                <div style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--bg-main)', borderRadius: '50%', padding: 4 }}>
+                  <Camera size={16} color="var(--text-secondary)" />
+                </div>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Group name (required)"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem 1rem', background: 'transparent', border: '1px solid #60a5fa', borderRadius: '8px', color: 'var(--text-primary)', outline: 'none', fontSize: '1rem', marginBottom: '2rem' }}
+                autoFocus
+              />
+
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Disappearing messages</span>
+                <div style={{ background: 'var(--bg-secondary)', padding: '0.4rem 0.8rem', borderRadius: '16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  Off <ChevronDown size={14} />
+                </div>
+              </div>
+
+              <div style={{ width: '100%', overflowY: 'auto', maxHeight: '200px' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>Members</span>
+                {selectedMembers.map(m => (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                    <div className="avatar" style={{ background: '#60a5fa', width: 32, height: 32 }}>
+                      {m.avatar_url ? <img src={m.avatar_url} alt="Avatar" /> : m.initial}
+                    </div>
+                    <span style={{ fontSize: '0.9rem' }}>{m.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding: '1rem', marginTop: 'auto' }}>
+              <button 
+                disabled={!groupName.trim() || sendingMsg}
+                onClick={handleCreateGroup}
+                style={{ width: '100%', padding: '1rem', background: groupName.trim() ? '#8b5cf6' : 'var(--bg-secondary)', color: groupName.trim() ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: groupName.trim() ? 'pointer' : 'not-allowed' }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <div className="sidebar-header">
@@ -707,19 +872,35 @@ export default function SignalDashboard() {
                           <span>1 Unread Message</span>
                         </div>
                         <div className="message-date">Today</div>
-                        {activeChat.messages.map((msg: any, idx: number) => (
-                          <div key={idx} className={`message-bubble ${msg.out ? 'out' : ''}`} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '0.5rem' }}>
-                            <span>{msg.text}</span>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              {msg.time || 'Now'}
-                              {msg.out && (
-                                msg.status === 'read' ? <CheckCheck size={14} color="#60a5fa" /> :
-                                msg.status === 'delivered' ? <CheckCheck size={14} color="var(--text-secondary)" /> :
-                                <Check size={14} color="var(--text-secondary)" />
+                        {activeChat.messages.map((msg: any, idx: number) => {
+                          if (msg.sender_id === null) {
+                            return (
+                              <div key={idx} style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '1rem 0', fontWeight: 500 }}>
+                                {msg.text}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.out ? 'flex-end' : 'flex-start', marginBottom: '0.5rem' }}>
+                              {!msg.out && activeChat.is_group && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.2rem', marginLeft: '0.5rem' }}>
+                                  {msg.sender_name || 'Unknown'}
+                                </span>
                               )}
-                            </span>
-                          </div>
-                        ))}
+                              <div className={`message-bubble ${msg.out ? 'out' : ''}`} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+                                <span>{msg.text}</span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  {msg.time || 'Now'}
+                                  {msg.out && (
+                                    msg.status === 'read' ? <CheckCheck size={14} color="#60a5fa" /> :
+                                    msg.status === 'delivered' ? <CheckCheck size={14} color="var(--text-secondary)" /> :
+                                    <Check size={14} color="var(--text-secondary)" />
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </>
                     ) : (
                       <div style={{ textAlign: 'center', color: 'var(--text-secondary)', margin: 'auto' }}>
