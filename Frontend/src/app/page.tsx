@@ -24,13 +24,18 @@ import {
   Send,
   Plus,
   Check,
-  CheckCheck
+  CheckCheck,
+  ArrowLeft,
+  Users,
+  AtSign,
+  Hash
 } from "lucide-react";
 
 export default function SignalDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"chats" | "settings">("chats");
+  const [sidebarView, setSidebarView] = useState<"chats" | "new_chat">("chats");
 
   // Settings State
   const [displayName, setDisplayName] = useState("");
@@ -398,12 +403,12 @@ export default function SignalDashboard() {
 
       {/* 2. Sidebar (Middle) */}
       <div className="sidebar">
-        {view === "chats" ? (
+        {view === "chats" && sidebarView === "chats" ? (
           <>
             <div className="sidebar-header">
               <span>Chats</span>
               <div className="sidebar-header-icons">
-                <button><Edit size={18} strokeWidth={2} /></button>
+                <button onClick={() => setSidebarView("new_chat")}><Edit size={18} strokeWidth={2} /></button>
                 <button><MoreHorizontal size={18} strokeWidth={2} /></button>
               </div>
             </div>
@@ -475,6 +480,115 @@ export default function SignalDashboard() {
                 ) : (
                   <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                     No recent chats. Search for a user to start messaging!
+                  </div>
+                )
+              )}
+            </div>
+          </>
+        ) : view === "chats" && sidebarView === "new_chat" ? (
+          <>
+            <div className="sidebar-header" style={{ justifyContent: 'flex-start', gap: '1.5rem', padding: '1.25rem 1rem' }}>
+              <button onClick={() => { setSidebarView("chats"); setSearchQuery(""); }} style={{ color: 'var(--text-secondary)' }}>
+                <ArrowLeft size={20} strokeWidth={2} />
+              </button>
+              <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>New chat</span>
+            </div>
+
+            <div className="search-container" style={{ padding: '0 1rem 1rem' }}>
+              <div className="search-input-wrapper">
+                <Search size={16} color="var(--text-secondary)" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Name, username, or number"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {!searchQuery || searchQuery.length < 2 ? (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <div className="chat-list-item" style={{ padding: '0.75rem 1rem' }}>
+                      <div className="avatar" style={{ background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', width: 40, height: 40 }}>
+                        <Users size={18} />
+                      </div>
+                      <div className="chat-info">
+                        <span className="chat-name" style={{ fontWeight: 500 }}>New group</span>
+                      </div>
+                    </div>
+                    <div className="chat-list-item" style={{ padding: '0.75rem 1rem' }}>
+                      <div className="avatar" style={{ background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', width: 40, height: 40 }}>
+                        <AtSign size={18} />
+                      </div>
+                      <div className="chat-info">
+                        <span className="chat-name" style={{ fontWeight: 500 }}>Find by username</span>
+                      </div>
+                    </div>
+                    <div className="chat-list-item" style={{ padding: '0.75rem 1rem' }}>
+                      <div className="avatar" style={{ background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', width: 40, height: 40 }}>
+                        <Hash size={18} />
+                      </div>
+                      <div className="chat-info">
+                        <span className="chat-name" style={{ fontWeight: 500 }}>Find by phone number</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ padding: '1rem', color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 600, marginTop: '0.5rem' }}>
+                    Contacts
+                  </div>
+                  {chats.map(contact => (
+                    <div
+                      key={contact.id}
+                      className="chat-list-item"
+                      onClick={() => {
+                        setSidebarView("chats");
+                        setActiveChat(contact);
+                        setSearchQuery("");
+                      }}
+                    >
+                      <div className="avatar" style={{ background: '#60a5fa', width: 40, height: 40 }}>
+                        {contact.avatar_url ? <img src={contact.avatar_url} alt="Avatar" /> : contact.initial}
+                      </div>
+                      <div className="chat-info">
+                        <span className="chat-name" style={{ fontWeight: 500 }}>{contact.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                searchResults.length > 0 ? (
+                  searchResults.map(contact => (
+                    <div
+                      key={contact.id}
+                      className="chat-list-item"
+                      onClick={() => {
+                        setSidebarView("chats");
+                        setActiveChat({
+                          id: contact.id,
+                          name: contact.display_name || contact.username,
+                          initial: (contact.display_name || contact.username || "?").charAt(0).toLowerCase(),
+                          avatar: contact.avatar_url
+                        });
+                        setSearchQuery("");
+                      }}
+                    >
+                      <div className="avatar" style={{ background: '#60a5fa', width: 40, height: 40 }}>
+                        {contact.avatar_url ? <img src={contact.avatar_url} alt="Avatar" /> : (contact.display_name || contact.username || "?").charAt(0).toLowerCase()}
+                      </div>
+                      <div className="chat-info">
+                        <span className="chat-name">{contact.display_name || contact.username}</span>
+                        <div className="chat-preview">@{contact.username}</div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No results found
                   </div>
                 )
               )}
