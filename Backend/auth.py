@@ -421,3 +421,57 @@ def create_group(req: CreateGroupRequest, current_user: models.User = Depends(ge
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/group/{group_id}/members")
+def get_group_members(group_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    participant = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.conversation_id == group_id,
+        models.ConversationParticipant.user_id == current_user.id
+    ).first()
+    if not participant:
+        raise HTTPException(status_code=403, detail="Not a participant")
+        
+    members = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.conversation_id == group_id
+    ).all()
+    
+    return [
+        {
+            "id": m.user.id,
+            "username": m.user.username,
+            "display_name": m.user.display_name,
+            "avatar_url": m.user.avatar_url,
+            "role": m.role
+        } for m in members if m.user
+    ]
+
+@router.delete("/group/{group_id}/member/{user_id}")
+def remove_group_member(group_id: int, user_id: int, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    admin_check = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.conversation_id == group_id,
+        models.ConversationParticipant.user_id == current_user.id,
+        models.ConversationParticipant.role == "admin"
+    ).first()
+    
+    if not admin_check:
+        raise HTTPException(status_code=403, detail="Only admins can remove members")
+        
+    target_member = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.conversation_id == group_id,
+        models.ConversationParticipant.user_id == user_id
+    ).first()
+    
+    if not target_member:
+        raise HTTPException(status_code=404, detail="Member not found")
+        
+    try:
+        user_name = target_member.user.display_name or target_member.user.username
+        db.delete(target_member)
+        
+        msg = models.Message(sender_id=None, conversation_id=group_id, text=f"{user_name} was removed from the group.")
+        db.add(msg)
+        db.commit()
+        return {"message": "Member removed"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

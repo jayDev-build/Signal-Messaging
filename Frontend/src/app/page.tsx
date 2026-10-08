@@ -30,7 +30,8 @@ import {
   AtSign,
   Hash,
   Camera,
-  ChevronDown
+  ChevronDown,
+  Video
 } from "lucide-react";
 
 export default function SignalDashboard() {
@@ -57,6 +58,11 @@ export default function SignalDashboard() {
   // Chat State
   const [messageText, setMessageText] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  // Group Details Sidebar State
+  const [showGroupDetails, setShowGroupDetails] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<any[]>([]);
+  const [memberMenuOpen, setMemberMenuOpen] = useState<number | null>(null);
 
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
@@ -259,6 +265,41 @@ export default function SignalDashboard() {
     };
     fetchMessages();
   }, [activeChat?.id]);
+
+  const fetchGroupMembers = async (chatId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const gId = chatId.replace("group_", "");
+      const res = await fetch(`http://127.0.0.1:8000/auth/group/${gId}/members`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setGroupMembers(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRemoveMember = async (userId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const gId = activeChat.id.replace("group_", "");
+      const res = await fetch(`http://127.0.0.1:8000/auth/group/${gId}/member/${userId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setGroupMembers(groupMembers.filter(m => m.id !== userId));
+        setMemberMenuOpen(null);
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to remove member");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -837,8 +878,113 @@ export default function SignalDashboard() {
       <div className="main-content">
         {view === "chats" ? (
           activeChat ? (
-            <>
-              <div className="main-header">
+            (showGroupDetails && activeChat.is_group) ? (
+              <div className="group-profile-view" style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-main)', overflowY: 'auto' }}>
+                 <div style={{ display: 'flex', alignItems: 'center', padding: '1rem', borderBottom: '1px solid var(--divider)' }}>
+                   <button onClick={() => setShowGroupDetails(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                     <ArrowLeft size={20} />
+                     <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>Group Details</span>
+                   </button>
+                 </div>
+                 
+                 <div style={{ padding: '2rem 1rem', textAlign: 'center', borderBottom: '1px solid var(--divider)' }}>
+                   <div className="avatar" style={{ width: 80, height: 80, fontSize: '2.5rem', background: '#60a5fa', margin: '0 auto 1rem' }}>
+                     {activeChat.initial}
+                   </div>
+                   <h2 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>{activeChat.name}</h2>
+                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Add group description...</p>
+                   
+                   <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                           <Video size={20} />
+                        </div>
+                        <span style={{ fontSize: '0.8rem' }}>Video</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                           <Bell size={20} />
+                        </div>
+                        <span style={{ fontSize: '0.8rem' }}>Mute</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                           <Search size={20} />
+                        </div>
+                        <span style={{ fontSize: '0.8rem' }}>Search</span>
+                      </div>
+                   </div>
+                 </div>
+                 
+                 <div style={{ padding: '1rem', borderBottom: '1px solid var(--divider)' }}>
+                   <div style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', borderRadius: '8px' }} className="hover-bg">
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                         <span>Disappearing messages</span>
+                         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>Off</span>
+                      </div>
+                   </div>
+                   <div style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', borderRadius: '8px' }} className="hover-bg">
+                      <span>Chat color</span>
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#60a5fa' }}></div>
+                   </div>
+                   <div style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', borderRadius: '8px' }} className="hover-bg">
+                      <span>Notifications</span>
+                   </div>
+                 </div>
+
+                 <div style={{ padding: '1rem' }}>
+                    <h3 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {groupMembers.length} members
+                      <Search size={16} style={{ cursor: 'pointer' }} />
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                      <div className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}>
+                         <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                           <Plus size={20} />
+                         </div>
+                         <span>Add members</span>
+                      </div>
+                      {groupMembers.map(m => (
+                        <div key={m.id} className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer', position: 'relative' }} onClick={() => setMemberMenuOpen(memberMenuOpen === m.id ? null : m.id)}>
+                          <div className="avatar" style={{ width: 36, height: 36, fontSize: '1rem', background: '#fca5a5' }}>
+                            {(m.display_name || m.username).charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              {m.id === user?.id ? 'You' : (m.display_name || m.username)}
+                            </span>
+                            {m.id === user?.id && <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Add member label &gt;</span>}
+                          </div>
+                          {m.role === 'admin' && <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Admin</span>}
+                          
+                          {memberMenuOpen === m.id && m.id !== user?.id && (
+                            <div style={{ position: 'absolute', right: 10, top: 40, background: 'var(--bg-main)', border: '1px solid var(--divider)', borderRadius: '8px', padding: '0.5rem', zIndex: 10, minWidth: 150, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                              <div className="hover-bg" style={{ padding: '0.5rem', borderRadius: '4px' }}>Nickname</div>
+                              <div className="hover-bg" style={{ padding: '0.5rem', borderRadius: '4px' }}>Block</div>
+                              {groupMembers.find(gm => gm.id === user?.id)?.role === 'admin' && (
+                                <div className="hover-bg" style={{ padding: '0.5rem', borderRadius: '4px', color: '#ff6b6b' }} onClick={(e) => { e.stopPropagation(); handleRemoveMember(m.id); }}>
+                                  Remove from group
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                 </div>
+              </div>
+            ) : (
+              <>
+                <div 
+                  className="main-header" 
+                  style={{ cursor: activeChat.is_group ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (activeChat.is_group) {
+                      setShowGroupDetails(true);
+                      if (!showGroupDetails) fetchGroupMembers(activeChat.id);
+                    }
+                  }}
+                >
                 <div className="avatar" style={{ width: 32, height: 32, fontSize: '1rem', background: '#fca5a5' }}>
                   {activeChat.initial}
                 </div>
@@ -945,6 +1091,7 @@ export default function SignalDashboard() {
                 </div>
               </div>
             </>
+            )
           ) : (
             <div className="empty-state">
               <h3>No chats</h3>
