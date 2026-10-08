@@ -34,6 +34,11 @@ export default function SignalDashboard() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
   const mockContacts: any[] = [];
@@ -74,6 +79,32 @@ export default function SignalDashboard() {
     
     fetchProfile();
   }, [router]);
+
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`http://127.0.0.1:8000/auth/search?query=${encodeURIComponent(searchQuery)}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -157,30 +188,67 @@ export default function SignalDashboard() {
             <div className="search-container">
               <div className="search-input-wrapper">
                 <Search size={16} color="var(--text-secondary)" />
-                <input type="text" className="search-input" placeholder="Search" />
+                <input 
+                  type="text" 
+                  className="search-input" 
+                  placeholder="Search" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
                 <Filter size={16} color="var(--text-secondary)" style={{marginLeft: 'auto'}} />
               </div>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              {mockContacts.map(contact => (
-                <div 
-                  key={contact.id} 
-                  className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
-                  onClick={() => setActiveChat(contact)}
-                >
-                  <div className="avatar">
-                    {contact.avatar ? <img src={contact.avatar} alt="Avatar" /> : contact.initial}
-                  </div>
-                  <div className="chat-info">
-                    <div className="chat-name-row">
-                      <span className="chat-name">{contact.name}</span>
-                      <span className="chat-time">Now</span>
+              {searchQuery.length >= 2 ? (
+                searchResults.length > 0 ? (
+                  searchResults.map(contact => (
+                    <div 
+                      key={contact.id} 
+                      className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
+                      onClick={() => setActiveChat({
+                        id: contact.id,
+                        name: contact.display_name || contact.username,
+                        initial: (contact.display_name || contact.username || "?").charAt(0).toLowerCase(),
+                        avatar: contact.avatar_url
+                      })}
+                    >
+                      <div className="avatar" style={{background: '#60a5fa'}}>
+                        {contact.avatar_url ? <img src={contact.avatar_url} alt="Avatar" /> : (contact.display_name || contact.username || "?").charAt(0).toLowerCase()}
+                      </div>
+                      <div className="chat-info">
+                        <div className="chat-name-row">
+                          <span className="chat-name">{contact.display_name || contact.username}</span>
+                        </div>
+                        <div className="chat-preview">@{contact.username}</div>
+                      </div>
                     </div>
-                    <div className="chat-preview">Hi</div>
+                  ))
+                ) : (
+                  <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    {isSearching ? "Searching..." : "No users found"}
                   </div>
-                </div>
-              ))}
+                )
+              ) : (
+                mockContacts.map(contact => (
+                  <div 
+                    key={contact.id} 
+                    className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
+                    onClick={() => setActiveChat(contact)}
+                  >
+                    <div className="avatar">
+                      {contact.avatar ? <img src={contact.avatar} alt="Avatar" /> : contact.initial}
+                    </div>
+                    <div className="chat-info">
+                      <div className="chat-name-row">
+                        <span className="chat-name">{contact.name}</span>
+                        <span className="chat-time">Now</span>
+                      </div>
+                      <div className="chat-preview">Hi</div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </>
         ) : (

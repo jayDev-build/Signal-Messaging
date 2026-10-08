@@ -120,3 +120,24 @@ def get_me(current_user: models.User = Depends(get_current_user)):
         "display_name": current_user.display_name,
         "avatar_url": current_user.avatar_url
     }
+
+@router.get("/search")
+def search_users(query: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not query or len(query) < 2:
+        return []
+    
+    results = db.query(models.User).filter(
+        models.User.username.ilike(f"%{query}%"),
+        models.User.id != current_user.id,
+        models.User.username != None
+    ).limit(20).all()
+    
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "display_name": u.display_name,
+            "avatar_url": u.avatar_url
+        }
+        for u in results
+    ]
