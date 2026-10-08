@@ -47,7 +47,7 @@ export default function SignalDashboard() {
 
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
-  const mockContacts: any[] = [];
+  const [chats, setChats] = useState<any[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +85,15 @@ export default function SignalDashboard() {
         setDisplayName(data.display_name || "");
         setUsername(data.username || "");
         setAvatarUrl(data.avatar_url || "");
+        
+        // Fetch chats
+        const chatsRes = await fetch("http://127.0.0.1:8000/auth/chats", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (chatsRes.ok) {
+          const chatsData = await chatsRes.json();
+          setChats(chatsData);
+        }
       } catch (err) {
         localStorage.removeItem("token");
         router.push("/login");
@@ -316,24 +325,30 @@ export default function SignalDashboard() {
                   </div>
                 )
               ) : (
-                mockContacts.map(contact => (
-                  <div
-                    key={contact.id}
-                    className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
-                    onClick={() => setActiveChat(contact)}
-                  >
-                    <div className="avatar">
-                      {contact.avatar ? <img src={contact.avatar} alt="Avatar" /> : contact.initial}
-                    </div>
-                    <div className="chat-info">
-                      <div className="chat-name-row">
-                        <span className="chat-name">{contact.name}</span>
-                        <span className="chat-time">Now</span>
+                chats.length > 0 ? (
+                  chats.map(contact => (
+                    <div
+                      key={contact.id}
+                      className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
+                      onClick={() => setActiveChat(contact)}
+                    >
+                      <div className="avatar" style={{ background: '#fca5a5' }}>
+                        {contact.avatar_url ? <img src={contact.avatar_url} alt="Avatar" /> : contact.initial}
                       </div>
-                      <div className="chat-preview">Hi</div>
+                      <div className="chat-info">
+                        <div className="chat-name-row">
+                          <span className="chat-name">{contact.name}</span>
+                          <span className="chat-time">{contact.last_message_time || ""}</span>
+                        </div>
+                        <div className="chat-preview">{contact.last_message || "No messages yet"}</div>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    No recent chats. Search for a user to start messaging!
                   </div>
-                ))
+                )
               )}
             </div>
           </>

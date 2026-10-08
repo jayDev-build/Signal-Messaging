@@ -208,3 +208,60 @@ def send_first_message(req: FirstMessageRequest, background_tasks: BackgroundTas
         # 6. ERROR HANDLING: Rollback the transaction on failure
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create conversation and send message: {str(e)}")
+
+@router.get("/chats")
+def get_user_chats(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Get all conversation participants for the current user
+    user_participations = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.user_id == current_user.id
+    ).all()
+    
+    chats_dict = {}
+    
+    for p in user_participations:
+        conversation = p.conversation
+        if not conversation.is_group:
+            # Find the other participant
+            other_p = db.query(models.ConversationParticipant).filter(
+                models.ConversationParticipant.conversation_id == conversation.id,
+                models.ConversationParticipant.user_id != current_user.id
+            ).first()
+            
+            if other_p:
+                other_user = other_p.user
+                
+                # Get the latest message for THIS conversation
+                last_msg = db.query(models.Message).filter(
+                    models.Message.conversation_id == conversation.id
+                ).order_by(models.Message.created_at.desc()).first()
+                
+                if other_user.id not in chats_dict:
+                    chats_dict[other_user.id] = {
+                        "id": other_user.id,
+                        "conversation_id": conversation.id,
+                        "name": other_user.display_name or other_user.username or "Unknown",
+                        "initial": (other_user.display_name or other_user.username or "?")[0].upper(),
+                        "avatar_url": other_user.avatar_url,
+                        "last_message": last_msg.text if last_msg else None,
+                        "last_message_time": last_msg.created_at.strftime("%H:%M") if last_msg else None,
+                        "_last_msg_obj": last_msg
+                    }
+                else:
+                    # Update if this conversation has a newer message
+                    existing_msg = chats_dict[other_user.id]["_last_msg_obj"]
+                    if last_msg:
+                        if not existing_msg or last_msg.created_at > existing_msg.created_at:
+                            chats_dict[other_user.id]["last_message"] = last_msg.text
+                            chats_dict[other_user.id]["last_message_time"] = last_msg.created_at.strftime("%H:%M")
+                            chats_dict[other_user.id]["_last_msg_obj"] = last_msg
+                            chats_dict[other_user.id]["conversation_id"] = conversation.id
+                            
+    # Clean up and sort by time
+    final_chats = []
+    for uid, data in chats_dict.items():
+        del data["_last_msg_obj"]
+        final_chats.append(data)
+        
+    final_chats.sort(key=lambda x: x["last_message_time"] or "", reverse=True)
+    
+    return final_chats
