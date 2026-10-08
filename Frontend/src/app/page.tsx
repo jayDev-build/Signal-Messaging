@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
+import {
   Menu,
   MessageCircle,
   Phone,
@@ -11,12 +11,12 @@ import {
   Search,
   Edit,
   MoreHorizontal,
-  User, 
-  Heart, 
-  Moon, 
-  Bell, 
-  Lock, 
-  Database, 
+  User,
+  Heart,
+  Moon,
+  Bell,
+  Lock,
+  Database,
   DownloadCloud,
   LogOut,
   Pencil,
@@ -29,7 +29,7 @@ export default function SignalDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"chats" | "settings">("chats");
-  
+
   // Settings State
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -48,7 +48,7 @@ export default function SignalDashboard() {
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
   const mockContacts: any[] = [];
-  
+
   const [isNavExpanded, setIsNavExpanded] = useState(false);
 
   const router = useRouter();
@@ -60,16 +60,16 @@ export default function SignalDashboard() {
         router.push("/login");
         return;
       }
-      
+
       try {
         const res = await fetch("http://127.0.0.1:8000/auth/me", {
           headers: {
             "Authorization": `Bearer ${token}`
           }
         });
-        
+
         if (!res.ok) throw new Error("Not authenticated");
-        
+
         const data = await res.json();
         setUser(data);
         setDisplayName(data.display_name || "");
@@ -82,20 +82,19 @@ export default function SignalDashboard() {
         setLoading(false);
       }
     };
-    
+
     fetchProfile();
   }, [router]);
 
   useEffect(() => {
     if (!user) return;
-    
+
     const ws = new WebSocket(`ws://127.0.0.1:8000/ws/${user.id}`);
-    
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "new_message") {
-          alert(`New message from ${data.message.sender_name}: ${data.message.text}`);
           setActiveChat(prev => {
             // Only append if we are currently chatting with the sender
             if (prev && prev.id === data.message.sender_id) {
@@ -112,7 +111,7 @@ export default function SignalDashboard() {
         console.error("WS Error:", err);
       }
     };
-    
+
     return () => {
       ws.close();
     };
@@ -155,13 +154,13 @@ export default function SignalDashboard() {
       const token = localStorage.getItem("token");
       const res = await fetch("http://127.0.0.1:8000/auth/profile", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ display_name: displayName, avatar_url: avatarUrl || null, username: username || null })
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json();
         alert(errorData.detail || "Failed to update profile");
@@ -179,13 +178,13 @@ export default function SignalDashboard() {
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !activeChat) return;
-    
+
     setSendingMsg(true);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("http://127.0.0.1:8000/auth/message/first", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
@@ -194,13 +193,13 @@ export default function SignalDashboard() {
           text: messageText.trim()
         })
       });
-      
+
       if (!res.ok) {
         const err = await res.json();
         alert(err.detail || "Failed to send message");
         return;
       }
-      
+
       // Update UI optimistically
       const newMsg = { text: messageText.trim(), out: true, time: "Just now" };
       setActiveChat({
@@ -241,9 +240,9 @@ export default function SignalDashboard() {
           <div className="thin-nav-item-icon"><CircleDashed size={22} strokeWidth={1.5} /></div>
           {isNavExpanded && <span className="thin-nav-item-label">Stories</span>}
         </div>
-        
+
         <div className="thin-nav-spacer"></div>
-        
+
         <div className={`thin-nav-item ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")}>
           <div className="thin-nav-item-icon"><Settings size={22} strokeWidth={1.5} fill={view === "settings" ? "currentColor" : "none"} /></div>
           {isNavExpanded && <span className="thin-nav-item-label">Settings</span>}
@@ -261,18 +260,18 @@ export default function SignalDashboard() {
                 <button><MoreHorizontal size={18} strokeWidth={2} /></button>
               </div>
             </div>
-            
+
             <div className="search-container">
               <div className="search-input-wrapper">
                 <Search size={16} color="var(--text-secondary)" />
-                <input 
-                  type="text" 
-                  className="search-input" 
-                  placeholder="Search" 
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <Filter size={16} color="var(--text-secondary)" style={{marginLeft: 'auto'}} />
+                <Filter size={16} color="var(--text-secondary)" style={{ marginLeft: 'auto' }} />
               </div>
             </div>
 
@@ -280,8 +279,8 @@ export default function SignalDashboard() {
               {searchQuery.length >= 2 ? (
                 searchResults.length > 0 ? (
                   searchResults.map(contact => (
-                    <div 
-                      key={contact.id} 
+                    <div
+                      key={contact.id}
                       className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
                       onClick={() => setActiveChat({
                         id: contact.id,
@@ -290,7 +289,7 @@ export default function SignalDashboard() {
                         avatar: contact.avatar_url
                       })}
                     >
-                      <div className="avatar" style={{background: '#60a5fa'}}>
+                      <div className="avatar" style={{ background: '#60a5fa' }}>
                         {contact.avatar_url ? <img src={contact.avatar_url} alt="Avatar" /> : (contact.display_name || contact.username || "?").charAt(0).toLowerCase()}
                       </div>
                       <div className="chat-info">
@@ -308,8 +307,8 @@ export default function SignalDashboard() {
                 )
               ) : (
                 mockContacts.map(contact => (
-                  <div 
-                    key={contact.id} 
+                  <div
+                    key={contact.id}
                     className={`chat-list-item ${activeChat?.id === contact.id ? 'active' : ''}`}
                     onClick={() => setActiveChat(contact)}
                   >
@@ -334,8 +333,8 @@ export default function SignalDashboard() {
               Settings
             </div>
 
-            <div className="user-card" onClick={() => {}}>
-              <div className="avatar" style={{width: 48, height: 48, background: '#fca5a5'}}>
+            <div className="user-card" onClick={() => { }}>
+              <div className="avatar" style={{ width: 48, height: 48, background: '#fca5a5' }}>
                 {user.avatar_url ? (
                   <img src={user.avatar_url} alt="User Avatar" />
                 ) : (
@@ -407,20 +406,20 @@ export default function SignalDashboard() {
           activeChat ? (
             <>
               <div className="main-header">
-                <div className="avatar" style={{width: 32, height: 32, fontSize: '1rem', background: '#fca5a5'}}>
+                <div className="avatar" style={{ width: 32, height: 32, fontSize: '1rem', background: '#fca5a5' }}>
                   {activeChat.initial}
                 </div>
                 <span>{activeChat.name}</span>
-                <div style={{marginLeft: 'auto', display: 'flex', gap: '1rem', color: 'var(--text-secondary)'}}>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '1rem', color: 'var(--text-secondary)' }}>
                   <Phone size={20} />
                   <Settings size={20} />
                 </div>
               </div>
-              
+
               <div className="chat-area" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                   <div className="chat-profile-banner">
-                    <div className="avatar" style={{background: '#60a5fa'}}>
+                    <div className="avatar" style={{ background: '#60a5fa' }}>
                       {activeChat.initial}
                     </div>
                     <div className="chat-profile-name">{activeChat.name} &gt;</div>
@@ -442,9 +441,9 @@ export default function SignalDashboard() {
                         </div>
                         <div className="message-date">Today</div>
                         {activeChat.messages.map((msg: any, idx: number) => (
-                          <div key={idx} className={`message-bubble ${msg.out ? 'out' : ''}`} style={{display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '0.5rem'}}>
+                          <div key={idx} className={`message-bubble ${msg.out ? 'out' : ''}`} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '0.5rem' }}>
                             <span>{msg.text}</span>
-                            <span style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>{msg.time || 'Now'}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{msg.time || 'Now'}</span>
                           </div>
                         ))}
                       </>
@@ -459,17 +458,17 @@ export default function SignalDashboard() {
 
                 <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
                   <button style={{ color: 'var(--text-secondary)' }}><Plus size={22} /></button>
-                  <input 
-                    type="text" 
-                    placeholder="Send a message..." 
+                  <input
+                    type="text"
+                    placeholder="Send a message..."
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
                     disabled={sendingMsg}
-                    style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }} 
+                    style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }}
                   />
                   {messageText.trim().length > 0 ? (
-                    <button 
+                    <button
                       onClick={handleSendMessage}
                       disabled={sendingMsg}
                       style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(96, 165, 250, 0.1)' }}
@@ -492,7 +491,7 @@ export default function SignalDashboard() {
           <div className="settings-main-view">
             <div className="settings-container">
               <h2 className="settings-page-title">Profile</h2>
-              
+
               <div className="profile-avatar-section">
                 <div className="profile-avatar-large">
                   {avatarUrl ? (
@@ -514,11 +513,11 @@ export default function SignalDashboard() {
                   <div className="settings-field" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
                     <User className="settings-field-icon" size={20} />
                     <div className="settings-field-content">
-                      <input 
-                        type="text" 
-                        className="settings-input" 
-                        value={displayName} 
-                        onChange={(e) => setDisplayName(e.target.value)} 
+                      <input
+                        type="text"
+                        className="settings-input"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
                         placeholder="Display Name"
                       />
                     </div>
@@ -526,10 +525,10 @@ export default function SignalDashboard() {
                   <div className="settings-field">
                     <Pencil className="settings-field-icon" size={18} />
                     <div className="settings-field-content">
-                      <input 
-                        type="text" 
-                        className="settings-input" 
-                        placeholder="About" 
+                      <input
+                        type="text"
+                        className="settings-input"
+                        placeholder="About"
                       />
                     </div>
                   </div>
@@ -544,11 +543,11 @@ export default function SignalDashboard() {
                   <div className="settings-field">
                     <span className="settings-field-icon" style={{ fontSize: '1.25rem', fontWeight: 500, fontFamily: 'monospace' }}>@</span>
                     <div className="settings-field-content">
-                      <input 
-                        type="text" 
-                        className="settings-input" 
-                        value={username} 
-                        onChange={(e) => setUsername(e.target.value)} 
+                      <input
+                        type="text"
+                        className="settings-input"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
                         placeholder="Username"
                       />
                     </div>
