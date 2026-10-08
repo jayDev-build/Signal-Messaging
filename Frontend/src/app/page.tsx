@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Menu,
@@ -48,6 +48,16 @@ export default function SignalDashboard() {
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
   const mockContacts: any[] = [];
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [activeChat?.messages]);
 
   const [isNavExpanded, setIsNavExpanded] = useState(false);
 
@@ -453,6 +463,7 @@ export default function SignalDashboard() {
                         <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>Send a message to start the conversation.</p>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
                 </div>
 
