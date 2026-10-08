@@ -64,10 +64,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 elif payload.get("type") == "typing":
                     target_id = payload.get("target_user_id")
                     if target_id:
-                        await manager.send_personal_message(json.dumps({
-                            "type": "typing",
-                            "sender_id": client_id
-                        }), target_id)
+                        if str(target_id).startswith("group_"):
+                            conv_id = int(str(target_id).replace("group_", ""))
+                            db = SessionLocal()
+                            try:
+                                members = db.query(models.ConversationParticipant).filter(models.ConversationParticipant.conversation_id == conv_id).all()
+                                for m in members:
+                                    if m.user_id != client_id:
+                                        await manager.send_personal_message(json.dumps({
+                                            "type": "typing",
+                                            "sender_id": client_id,
+                                            "chat_id": str(target_id)
+                                        }), m.user_id)
+                            finally:
+                                db.close()
+                        else:
+                            await manager.send_personal_message(json.dumps({
+                                "type": "typing",
+                                "sender_id": client_id,
+                                "chat_id": str(client_id)
+                            }), int(target_id))
             except json.JSONDecodeError:
                 pass
 

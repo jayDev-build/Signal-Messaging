@@ -202,12 +202,13 @@ export default function SignalDashboard() {
               };
             });
           } else if (data.type === "typing") {
-            setTypingUsers((prev: any) => ({ ...prev, [data.sender_id]: Date.now() }));
+            const typingChatId = data.chat_id || data.sender_id;
+            setTypingUsers((prev: any) => ({ ...prev, [typingChatId]: Date.now() }));
             setTimeout(() => {
               setTypingUsers((prev: any) => {
-                if (Date.now() - (prev[data.sender_id] || 0) >= 2500) {
+                if (Date.now() - (prev[typingChatId] || 0) >= 2500) {
                   const newObj = { ...prev };
-                  delete newObj[data.sender_id];
+                  delete newObj[typingChatId];
                   return newObj;
                 }
                 return prev;
