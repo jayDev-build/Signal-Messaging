@@ -172,7 +172,7 @@ export default function SignalDashboard() {
                   id: data.message.id, 
                   text: data.message.text, 
                   out: false, 
-                  time: "Just now", 
+                  time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(), 
                   status: "read",
                   sender_name: data.message.sender_name 
                 };
@@ -190,7 +190,7 @@ export default function SignalDashboard() {
                 const updatedChat = {
                   ...prevChats[chatIndex],
                   last_message: data.message.text,
-                  last_message_time: "Just now"
+                  last_message_time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase()
                 };
                 const newChats = [...prevChats];
                 newChats.splice(chatIndex, 1);
@@ -445,7 +445,7 @@ export default function SignalDashboard() {
       const resData = await res.json();
 
       // Update UI optimistically
-      const newMsg = { id: resData.message_id, text: messageText.trim(), out: true, time: "Just now", status: "sent" };
+      const newMsg = { id: resData.message_id, text: messageText.trim(), out: true, time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(), status: "sent" };
       setActiveChat({
         ...activeChat,
         messages: activeChat.messages ? [...activeChat.messages, newMsg] : [newMsg]
@@ -457,7 +457,7 @@ export default function SignalDashboard() {
           const updatedChat = {
             ...prevChats[chatIndex],
             last_message: messageText.trim(),
-            last_message_time: "Just now"
+            last_message_time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase()
           };
           const newChats = [...prevChats];
           newChats.splice(chatIndex, 1);

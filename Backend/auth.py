@@ -304,7 +304,7 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                         "initial": (other_user.display_name or other_user.username or "?")[0].upper(),
                         "avatar_url": other_user.avatar_url,
                         "last_message": last_msg.text if last_msg else None,
-                        "last_message_time": last_msg.created_at.strftime("%H:%M") if last_msg else None,
+                        "last_message_time": last_msg.created_at.strftime("%I:%M %p").lower() if last_msg else None,
                         "_last_msg_obj": last_msg
                     }
                 else:
@@ -312,7 +312,7 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                     if last_msg:
                         if not existing_msg or last_msg.created_at > existing_msg.created_at:
                             chats_dict[chat_id]["last_message"] = last_msg.text
-                            chats_dict[chat_id]["last_message_time"] = last_msg.created_at.strftime("%H:%M")
+                            chats_dict[chat_id]["last_message_time"] = last_msg.created_at.strftime("%I:%M %p").lower()
                             chats_dict[chat_id]["_last_msg_obj"] = last_msg
                             chats_dict[chat_id]["conversation_id"] = conversation.id
         else:
@@ -326,7 +326,7 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                     "initial": (conversation.name or "?")[0].upper(),
                     "avatar_url": None,
                     "last_message": last_msg.text if last_msg else None,
-                    "last_message_time": last_msg.created_at.strftime("%H:%M") if last_msg else None,
+                    "last_message_time": last_msg.created_at.strftime("%I:%M %p").lower() if last_msg else None,
                     "_last_msg_obj": last_msg,
                     "is_removed": p.role == "removed"
                 }
@@ -335,7 +335,7 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                 if last_msg:
                     if not existing_msg or last_msg.created_at > existing_msg.created_at:
                         chats_dict[chat_id]["last_message"] = last_msg.text
-                        chats_dict[chat_id]["last_message_time"] = last_msg.created_at.strftime("%H:%M")
+                        chats_dict[chat_id]["last_message_time"] = last_msg.created_at.strftime("%I:%M %p").lower()
                         chats_dict[chat_id]["_last_msg_obj"] = last_msg
                             
     # Clean up and sort by time
@@ -406,7 +406,7 @@ def get_conversation_messages(chat_id: str, background_tasks: BackgroundTasks, c
             "sender_id": m.sender_id,
             "sender_name": m.sender.display_name or m.sender.username if m.sender else None,
             "out": m.sender_id == current_user.id if m.sender_id else False,
-            "time": m.created_at.strftime("%H:%M"),
+            "time": m.created_at.strftime("%I:%M %p").lower(),
             "status": m.receipts[0].status if m.receipts else "sent"
         } for m in messages
     ]
