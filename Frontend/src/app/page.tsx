@@ -137,6 +137,30 @@ export default function SignalDashboard() {
   }, [user]);
 
   useEffect(() => {
+    const fetchMessages = async () => {
+      if (!activeChat || !activeChat.id) return;
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`http://127.0.0.1:8000/auth/messages/${activeChat.id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const msgs = await res.json();
+          setActiveChat((prev: any) => {
+            if (prev && prev.id === activeChat.id) {
+              return { ...prev, messages: msgs };
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch messages", err);
+      }
+    };
+    fetchMessages();
+  }, [activeChat?.id]);
+
+  useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
       return;

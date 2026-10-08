@@ -265,3 +265,28 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
     final_chats.sort(key=lambda x: x["last_message_time"] or "", reverse=True)
     
     return final_chats
+
+@router.get("/messages/{target_user_id}")
+def get_conversation_messages(target_user_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Find all conversations shared by current_user and target_user
+    user1_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == current_user.id).all())
+    user2_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == target_user_id).all())
+    
+    shared_convs = user1_convs.intersection(user2_convs)
+    
+    if not shared_convs:
+        return []
+        
+    messages = db.query(models.Message).filter(
+        models.Message.conversation_id.in_(shared_convs)
+    ).order_by(models.Message.created_at.asc()).all()
+    
+    return [
+        {
+            "id": m.id,
+            "text": m.text,
+            "sender_id": m.sender_id,
+            "out": m.sender_id == current_user.id,
+            "time": m.created_at.strftime("%H:%M")
+        } for m in messages
+    ]
