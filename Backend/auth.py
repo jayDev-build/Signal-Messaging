@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional
 
@@ -26,6 +27,7 @@ class VerifyOTPRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     display_name: str
     avatar_url: Optional[str] = None
+    username: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
@@ -95,12 +97,19 @@ def verify_otp(req: VerifyOTPRequest, db: Session = Depends(get_db)):
 
 @router.post("/profile")
 def update_profile(req: ProfileUpdateRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if req.username != current_user.username:
+        if req.username is not None:
+            existing_user = db.query(models.User).filter(func.lower(models.User.username) == req.username.lower()).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Username already exists")
+        current_user.username = req.username
+
     current_user.display_name = req.display_name
     if req.avatar_url is not None:
         current_user.avatar_url = req.avatar_url
     db.commit()
     db.refresh(current_user)
-    return {"message": "Profile updated", "display_name": current_user.display_name, "avatar_url": current_user.avatar_url}
+    return {"message": "Profile updated", "display_name": current_user.display_name, "avatar_url": current_user.avatar_url, "username": current_user.username}
 
 @router.get("/me")
 def get_me(current_user: models.User = Depends(get_current_user)):

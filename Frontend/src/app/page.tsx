@@ -84,17 +84,25 @@ export default function SignalDashboard() {
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
-      await fetch("http://127.0.0.1:8000/auth/profile", {
+      const res = await fetch("http://127.0.0.1:8000/auth/profile", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ display_name: displayName, avatar_url: avatarUrl || null })
+        body: JSON.stringify({ display_name: displayName, avatar_url: avatarUrl || null, username: username || null })
       });
-      setUser({ ...user, display_name: displayName, avatar_url: avatarUrl });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(errorData.detail || "Failed to update profile");
+        return;
+      }
+
+      setUser({ ...user, display_name: displayName, avatar_url: avatarUrl, username });
     } catch (err) {
       console.error(err);
+      alert("An error occurred while saving.");
     } finally {
       setSaving(false);
     }
@@ -379,7 +387,7 @@ export default function SignalDashboard() {
                 </div>
               </div>
 
-              {(displayName !== user?.display_name || avatarUrl !== user?.avatar_url) && (
+              {(displayName !== user?.display_name || avatarUrl !== user?.avatar_url || username !== user?.username) && (
                 <button className="btn-primary" onClick={handleSave} disabled={saving}>
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
