@@ -57,6 +57,17 @@ export default function SignalDashboard() {
   }, [activeChat?.id]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const typingTimeoutRef = useRef<any>(null);
+  const [typingUsers, setTypingUsers] = useState<{[key: number]: number}>({});
+
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessageText(e.target.value);
+    if (!typingTimeoutRef.current && wsRef.current?.readyState === WebSocket.OPEN && activeChat?.id) {
+      wsRef.current.send(JSON.stringify({ type: "typing", target_user_id: activeChat.id }));
+      typingTimeoutRef.current = setTimeout(() => { typingTimeoutRef.current = null; }, 2000);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -120,6 +131,7 @@ export default function SignalDashboard() {
 
     const connect = () => {
       ws = new WebSocket(`ws://127.0.0.1:8000/ws/${user.id}`);
+      wsRef.current = ws;
 
       ws.onmessage = (event) => {
         try {
@@ -170,6 +182,18 @@ export default function SignalDashboard() {
                 )
               };
             });
+          } else if (data.type === "typing") {
+            setTypingUsers((prev: any) => ({ ...prev, [data.sender_id]: Date.now() }));
+            setTimeout(() => {
+              setTypingUsers((prev: any) => {
+                if (Date.now() - (prev[data.sender_id] || 0) >= 2500) {
+                  const newObj = { ...prev };
+                  delete newObj[data.sender_id];
+                  return newObj;
+                }
+                return prev;
+              });
+            }, 3000);
           }
         } catch (err) {
           console.error("WS Error:", err);
@@ -587,13 +611,18 @@ export default function SignalDashboard() {
                   </div>
                 </div>
 
+                {typingUsers[activeChat.id] ? (
+                  <div style={{ padding: '0.25rem 2rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic', background: 'var(--bg-main)' }}>
+                    {activeChat.name} is typing...
+                  </div>
+                ) : null}
                 <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
                   <button style={{ color: 'var(--text-secondary)' }}><Plus size={22} /></button>
                   <input
                     type="text"
                     placeholder="Send a message..."
                     value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
+                    onChange={handleTyping}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
                     disabled={sendingMsg}
                     style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }}

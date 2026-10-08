@@ -61,6 +61,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                                 }), sender_id)
                     finally:
                         db.close()
+                elif payload.get("type") == "typing":
+                    target_id = payload.get("target_user_id")
+                    if target_id:
+                        await manager.send_personal_message(json.dumps({
+                            "type": "typing",
+                            "sender_id": client_id
+                        }), target_id)
             except json.JSONDecodeError:
                 pass
 
