@@ -363,6 +363,12 @@ export default function SignalDashboard() {
 
   return (
     <div className="app-container">
+      <style>{`
+        @keyframes typing-bounce {
+          0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
       {/* 1. Thin Nav (Leftmost) */}
       <div className={`thin-nav ${isNavExpanded ? 'expanded' : ''}`}>
         <div className="thin-nav-item" onClick={() => setIsNavExpanded(!isNavExpanded)}>
@@ -607,15 +613,17 @@ export default function SignalDashboard() {
                         <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>Send a message to start the conversation.</p>
                       </div>
                     )}
+                    {typingUsers[activeChat.id] ? (
+                      <div className="message-bubble" style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '0.5rem', width: 'fit-content', padding: '0.85rem 1.15rem' }}>
+                        <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--text-primary)', borderRadius: '50%', animation: 'typing-bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }}></span>
+                        <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--text-primary)', borderRadius: '50%', animation: 'typing-bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }}></span>
+                        <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--text-primary)', borderRadius: '50%', animation: 'typing-bounce 1.4s infinite ease-in-out both' }}></span>
+                      </div>
+                    ) : null}
                     <div ref={messagesEndRef} />
                   </div>
                 </div>
 
-                {typingUsers[activeChat.id] ? (
-                  <div style={{ padding: '0.25rem 2rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic', background: 'var(--bg-main)' }}>
-                    {activeChat.name} is typing...
-                  </div>
-                ) : null}
                 <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
                   <button style={{ color: 'var(--text-secondary)' }}><Plus size={22} /></button>
                   <input
