@@ -22,7 +22,9 @@ import {
   Pencil,
   Filter,
   Send,
-  Plus
+  Plus,
+  Check,
+  CheckCheck
 } from "lucide-react";
 
 export default function SignalDashboard() {
@@ -244,7 +246,7 @@ export default function SignalDashboard() {
       }
 
       // Update UI optimistically
-      const newMsg = { text: messageText.trim(), out: true, time: "Just now" };
+      const newMsg = { text: messageText.trim(), out: true, time: "Just now", status: "sent" };
       setActiveChat({
         ...activeChat,
         messages: activeChat.messages ? [...activeChat.messages, newMsg] : [newMsg]
@@ -492,7 +494,14 @@ export default function SignalDashboard() {
                         {activeChat.messages.map((msg: any, idx: number) => (
                           <div key={idx} className={`message-bubble ${msg.out ? 'out' : ''}`} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '0.5rem' }}>
                             <span>{msg.text}</span>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{msg.time || 'Now'}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                              {msg.time || 'Now'}
+                              {msg.out && (
+                                msg.status === 'read' ? <CheckCheck size={14} color="#60a5fa" /> :
+                                msg.status === 'delivered' ? <CheckCheck size={14} color="var(--text-secondary)" /> :
+                                <Check size={14} color="var(--text-secondary)" />
+                              )}
+                            </span>
                           </div>
                         ))}
                       </>

@@ -287,6 +287,7 @@ def get_conversation_messages(target_user_id: int, current_user: models.User = D
             "text": m.text,
             "sender_id": m.sender_id,
             "out": m.sender_id == current_user.id,
-            "time": m.created_at.strftime("%H:%M")
+            "time": m.created_at.strftime("%H:%M"),
+            "status": m.receipts[0].status if m.receipts else "sent"
         } for m in messages
     ]
