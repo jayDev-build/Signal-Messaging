@@ -38,6 +38,9 @@ class CreateGroupRequest(BaseModel):
     name: str
     member_ids: list[int]
 
+class AddMemberRequest(BaseModel):
+    user_id: int
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -483,6 +486,46 @@ def remove_group_member(group_id: int, user_id: int, background_tasks: Backgroun
         db.add(msg)
         db.commit()
         return {"message": "Member removed"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/group/{group_id}/member")
+def add_group_member(group_id: int, req: AddMemberRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    admin_check = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.conversation_id == group_id,
+        models.ConversationParticipant.user_id == current_user.id,
+        models.ConversationParticipant.role == "admin"
+    ).first()
+    
+    if not admin_check:
+        raise HTTPException(status_code=403, detail="Only admins can add members")
+        
+    target_member = db.query(models.ConversationParticipant).filter(
+        models.ConversationParticipant.conversation_id == group_id,
+        models.ConversationParticipant.user_id == req.user_id
+    ).first()
+    
+    target_user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    try:
+        user_name = target_user.display_name or target_user.username
+        
+        if target_member:
+            if target_member.role == "removed":
+                target_member.role = "member"
+            else:
+                return {"message": "User is already a member"}
+        else:
+            new_part = models.ConversationParticipant(user_id=req.user_id, conversation_id=group_id, role="member")
+            db.add(new_part)
+            
+        msg = models.Message(sender_id=None, conversation_id=group_id, text=f"{user_name} was added to the group.")
+        db.add(msg)
+        db.commit()
+        return {"message": "Member added"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

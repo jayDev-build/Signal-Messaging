@@ -63,6 +63,7 @@ export default function SignalDashboard() {
   const [showGroupDetails, setShowGroupDetails] = useState(false);
   const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [memberMenuOpen, setMemberMenuOpen] = useState<number | null>(null);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
@@ -278,6 +279,33 @@ export default function SignalDashboard() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+  const handleAddMember = async (userId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const gId = activeChat.id.replace("group_", "");
+      const res = await fetch(`http://127.0.0.1:8000/auth/group/${gId}/member`, {
+        method: "POST",
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ user_id: userId })
+      });
+      if (res.ok) {
+        alert("Member added successfully");
+        setShowAddMemberModal(false);
+        setSearchQuery("");
+        setSearchResults([]);
+        if (activeChat?.is_group) fetchGroupMembers(activeChat.id);
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to add member");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error adding member");
     }
   };
 
@@ -938,12 +966,14 @@ export default function SignalDashboard() {
                       <Search size={16} style={{ cursor: 'pointer' }} />
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                      <div className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}>
-                         <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                           <Plus size={20} />
-                         </div>
-                         <span>Add members</span>
-                      </div>
+                      {groupMembers.find(gm => gm.id === user?.id)?.role === 'admin' && (
+                        <div className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setShowAddMemberModal(true)}>
+                           <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                             <Plus size={20} />
+                           </div>
+                           <span>Add members</span>
+                        </div>
+                      )}
                       {groupMembers.map(m => (
                         <div key={m.id} className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer', position: 'relative' }} onClick={() => setMemberMenuOpen(memberMenuOpen === m.id ? null : m.id)}>
                           <div className="avatar" style={{ width: 36, height: 36, fontSize: '1rem', background: '#fca5a5' }}>
@@ -1185,6 +1215,57 @@ export default function SignalDashboard() {
           </div>
         )}
       </div>
+
+      {/* Add Member Modal */}
+      {showAddMemberModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'var(--bg-main)', padding: '2rem', borderRadius: '12px', width: '400px', maxWidth: '90%', border: '1px solid var(--divider)' }}>
+            <h2 style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              Add Member
+              <button onClick={() => { setShowAddMemberModal(false); setSearchQuery(""); setSearchResults([]); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <Plus size={24} style={{ transform: 'rotate(45deg)' }} />
+              </button>
+            </h2>
+            <div className="search-input-wrapper" style={{ marginBottom: '1rem' }}>
+              <Search size={16} color="var(--text-secondary)" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search by username..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              {searchResults.length > 0 ? (
+                searchResults.map(contact => {
+                  const isMember = groupMembers.find(m => m.id === contact.id);
+                  return (
+                    <div key={contact.id} className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', borderRadius: '8px', cursor: 'pointer' }} onClick={() => !isMember && handleAddMember(contact.id)}>
+                      <div className="avatar" style={{ width: 40, height: 40, fontSize: '1.2rem', background: '#fca5a5' }}>
+                        {(contact.display_name || contact.username).charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500 }}>{contact.display_name || contact.username}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{contact.username}</div>
+                      </div>
+                      {isMember ? (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Already member</span>
+                      ) : (
+                        <button className="btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Add</button>
+                      )}
+                    </div>
+                  );
+                })
+              ) : searchQuery.length >= 2 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem' }}>No users found</div>
+              ) : (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem' }}>Type to search</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
