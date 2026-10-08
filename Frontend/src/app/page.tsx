@@ -1259,8 +1259,28 @@ export default function SignalDashboard() {
                 })
               ) : searchQuery.length >= 2 ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem' }}>No users found</div>
+              ) : chats.filter(c => !c.is_group).length > 0 ? (
+                chats.filter(c => !c.is_group).map(contact => {
+                  const contactIdNum = parseInt(contact.id);
+                  const isMember = groupMembers.find(m => m.id === contactIdNum);
+                  return (
+                    <div key={contact.id} className="hover-bg" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', borderRadius: '8px', cursor: 'pointer' }} onClick={() => !isMember && handleAddMember(contactIdNum)}>
+                      <div className="avatar" style={{ width: 40, height: 40, fontSize: '1.2rem', background: '#fca5a5' }}>
+                        {contact.initial}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500 }}>{contact.name}</div>
+                      </div>
+                      {isMember ? (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Already member</span>
+                      ) : (
+                        <button className="btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Add</button>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem' }}>Type to search</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem' }}>No contacts found. Type to search globally.</div>
               )}
             </div>
           </div>
