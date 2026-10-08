@@ -8,11 +8,12 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Signal Messaging Backend")
 
 from auth import router as auth_router
+from config import FRONTEND_URL
 app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[FRONTEND_URL, "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

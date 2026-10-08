@@ -108,7 +108,7 @@ export default function SignalDashboard() {
       }
 
       try {
-        const res = await fetch("http://127.0.0.1:8000/auth/me", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }
@@ -123,7 +123,7 @@ export default function SignalDashboard() {
         setAvatarUrl(data.avatar_url || "");
         
         // Fetch chats
-        const chatsRes = await fetch("http://127.0.0.1:8000/auth/chats", {
+        const chatsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/chats`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (chatsRes.ok) {
@@ -148,7 +148,7 @@ export default function SignalDashboard() {
     let reconnectTimer: any;
 
     const connect = () => {
-      ws = new WebSocket(`ws://127.0.0.1:8000/ws/${user.id}`);
+      ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/ws/${user.id}`);
       wsRef.current = ws;
 
       ws.onmessage = (event) => {
@@ -195,8 +195,19 @@ export default function SignalDashboard() {
                 const newChats = [...prevChats];
                 newChats.splice(chatIndex, 1);
                 return [updatedChat, ...newChats];
+              } else {
+                const newChat = {
+                  id: String(chatId),
+                  is_group: String(chatId).startsWith("group_"),
+                  name: data.message.sender_name || "Unknown",
+                  initial: (data.message.sender_name || "?").charAt(0).toUpperCase(),
+                  avatar_url: null,
+                  last_message: data.message.text,
+                  last_message_time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(),
+                  is_removed: false
+                };
+                return [newChat, ...prevChats];
               }
-              return prevChats;
             });
           } else if (data.type === "receipt_update") {
             setActiveChat((prev: any) => {
@@ -248,7 +259,7 @@ export default function SignalDashboard() {
       if (!activeChat || !activeChat.id) return;
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://127.0.0.1:8000/auth/messages/${activeChat.id}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/messages/${activeChat.id}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
@@ -271,7 +282,7 @@ export default function SignalDashboard() {
     try {
       const token = localStorage.getItem("token");
       const gId = chatId.replace("group_", "");
-      const res = await fetch(`http://127.0.0.1:8000/auth/group/${gId}/members`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/group/${gId}/members`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -285,7 +296,7 @@ export default function SignalDashboard() {
     try {
       const token = localStorage.getItem("token");
       const gId = activeChat.id.replace("group_", "");
-      const res = await fetch(`http://127.0.0.1:8000/auth/group/${gId}/member`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/group/${gId}/member`, {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -313,7 +324,7 @@ export default function SignalDashboard() {
     try {
       const token = localStorage.getItem("token");
       const gId = activeChat.id.replace("group_", "");
-      const res = await fetch(`http://127.0.0.1:8000/auth/group/${gId}/member/${userId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/group/${gId}/member/${userId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -338,7 +349,7 @@ export default function SignalDashboard() {
       setIsSearching(true);
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://127.0.0.1:8000/auth/search?query=${encodeURIComponent(searchQuery)}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/search?query=${encodeURIComponent(searchQuery)}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
@@ -364,7 +375,7 @@ export default function SignalDashboard() {
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:8000/auth/profile", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/profile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -393,7 +404,7 @@ export default function SignalDashboard() {
     setSendingMsg(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:8000/auth/group", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/group`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ name: groupName.trim(), member_ids: selectedMembers.map(m => m.id) })
@@ -404,7 +415,7 @@ export default function SignalDashboard() {
       setSelectedMembers([]);
       setSidebarView("chats");
       
-      const chatsRes = await fetch("http://127.0.0.1:8000/auth/chats", {
+      const chatsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/chats`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (chatsRes.ok) {
@@ -424,7 +435,7 @@ export default function SignalDashboard() {
     setSendingMsg(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:8000/auth/message/first", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/message/first`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -462,8 +473,19 @@ export default function SignalDashboard() {
           const newChats = [...prevChats];
           newChats.splice(chatIndex, 1);
           return [updatedChat, ...newChats];
+        } else {
+          const newChat = {
+            id: activeChat.id,
+            is_group: activeChat.is_group,
+            name: activeChat.name,
+            initial: activeChat.initial,
+            avatar_url: activeChat.avatar_url,
+            last_message: messageText.trim(),
+            last_message_time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(),
+            is_removed: false
+          };
+          return [newChat, ...prevChats];
         }
-        return prevChats;
       });
       
       setMessageText("");

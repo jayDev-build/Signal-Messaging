@@ -6,14 +6,11 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 
 from database import get_db
 import models
-
-SECRET_KEY = "my_super_secret_mock_key_for_signal"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
+from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/verify-otp")
@@ -31,7 +28,7 @@ class ProfileUpdateRequest(BaseModel):
     username: Optional[str] = None
 
 class FirstMessageRequest(BaseModel):
-    target_user_id: str
+    target_user_id: Union[str, int]
     text: str
 
 class CreateGroupRequest(BaseModel):
@@ -298,7 +295,7 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                 
                 if chat_id not in chats_dict:
                     chats_dict[chat_id] = {
-                        "id": other_user.id,
+                        "id": str(other_user.id),
                         "conversation_id": conversation.id,
                         "name": other_user.display_name or other_user.username or "Unknown",
                         "initial": (other_user.display_name or other_user.username or "?")[0].upper(),
