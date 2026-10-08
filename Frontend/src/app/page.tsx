@@ -51,6 +51,11 @@ export default function SignalDashboard() {
   const [activeChat, setActiveChat] = useState<any>(null);
   const [chats, setChats] = useState<any[]>([]);
 
+  const activeChatIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    activeChatIdRef.current = activeChat?.id || null;
+  }, [activeChat?.id]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -110,31 +115,80 @@ export default function SignalDashboard() {
   useEffect(() => {
     if (!user) return;
 
-    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/${user.id}`);
+    let ws: WebSocket;
+    let reconnectTimer: any;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "new_message") {
-          setActiveChat(prev => {
-            // Only append if we are currently chatting with the sender
-            if (prev && prev.id === data.message.sender_id) {
-              const newMsg = { text: data.message.text, out: false, time: "Just now" };
+    const connect = () => {
+      ws = new WebSocket(`ws://127.0.0.1:8000/ws/${user.id}`);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "new_message") {
+            const isChatActive = activeChatIdRef.current === data.message.sender_id;
+            
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: isChatActive ? "message_read" : "message_delivered",
+                message_id: data.message.id,
+                sender_id: data.message.sender_id
+              }));
+            }
+
+            setActiveChat((prev: any) => {
+              if (prev && prev.id === data.message.sender_id) {
+                const newMsg = { id: data.message.id, text: data.message.text, out: false, time: "Just now", status: "read" };
+                return {
+                  ...prev,
+                  messages: prev.messages ? [...prev.messages, newMsg] : [newMsg]
+                };
+              }
+              return prev;
+            });
+
+            setChats((prevChats: any[]) => {
+              const chatIndex = prevChats.findIndex(c => c.id === data.message.sender_id);
+              if (chatIndex !== -1) {
+                const updatedChat = {
+                  ...prevChats[chatIndex],
+                  last_message: data.message.text,
+                  last_message_time: "Just now"
+                };
+                const newChats = [...prevChats];
+                newChats.splice(chatIndex, 1);
+                return [updatedChat, ...newChats];
+              }
+              return prevChats;
+            });
+          } else if (data.type === "receipt_update") {
+            setActiveChat((prev: any) => {
+              if (!prev || !prev.messages) return prev;
               return {
                 ...prev,
-                messages: prev.messages ? [...prev.messages, newMsg] : [newMsg]
+                messages: prev.messages.map((m: any) => 
+                  m.id === data.message_id ? { ...m, status: data.status } : m
+                )
               };
-            }
-            return prev;
-          });
+            });
+          }
+        } catch (err) {
+          console.error("WS Error:", err);
         }
-      } catch (err) {
-        console.error("WS Error:", err);
-      }
+      };
+
+      ws.onclose = () => {
+        reconnectTimer = setTimeout(connect, 2000);
+      };
     };
 
+    connect();
+
     return () => {
-      ws.close();
+      clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
     };
   }, [user]);
 
@@ -245,12 +299,30 @@ export default function SignalDashboard() {
         return;
       }
 
+      const resData = await res.json();
+
       // Update UI optimistically
-      const newMsg = { text: messageText.trim(), out: true, time: "Just now", status: "sent" };
+      const newMsg = { id: resData.message_id, text: messageText.trim(), out: true, time: "Just now", status: "sent" };
       setActiveChat({
         ...activeChat,
         messages: activeChat.messages ? [...activeChat.messages, newMsg] : [newMsg]
       });
+      
+      setChats(prevChats => {
+        const chatIndex = prevChats.findIndex(c => c.id === activeChat.id);
+        if (chatIndex !== -1) {
+          const updatedChat = {
+            ...prevChats[chatIndex],
+            last_message: messageText.trim(),
+            last_message_time: "Just now"
+          };
+          const newChats = [...prevChats];
+          newChats.splice(chatIndex, 1);
+          return [updatedChat, ...newChats];
+        }
+        return prevChats;
+      });
+      
       setMessageText("");
     } catch (e) {
       console.error(e);

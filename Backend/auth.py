@@ -202,7 +202,7 @@ def send_first_message(req: FirstMessageRequest, background_tasks: BackgroundTas
         }
         background_tasks.add_task(send_ws_notification, target_user.id, payload)
         
-        return {"message": "First message sent successfully", "conversation_id": conversation.id}
+        return {"message": "First message sent successfully", "conversation_id": conversation.id, "message_id": message.id}
         
     except Exception as e:
         # 6. ERROR HANDLING: Rollback the transaction on failure
@@ -267,7 +267,7 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
     return final_chats
 
 @router.get("/messages/{target_user_id}")
-def get_conversation_messages(target_user_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_conversation_messages(target_user_id: int, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Find all conversations shared by current_user and target_user
     user1_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == current_user.id).all())
     user2_convs = set(p.conversation_id for p in db.query(models.ConversationParticipant).filter(models.ConversationParticipant.user_id == target_user_id).all())
@@ -280,6 +280,24 @@ def get_conversation_messages(target_user_id: int, current_user: models.User = D
     messages = db.query(models.Message).filter(
         models.Message.conversation_id.in_(shared_convs)
     ).order_by(models.Message.created_at.asc()).all()
+    
+    # Mark unread messages as read
+    unread_receipts = db.query(models.MessageReceipt).join(models.Message).filter(
+        models.Message.conversation_id.in_(shared_convs),
+        models.Message.sender_id == target_user_id,
+        models.MessageReceipt.user_id == current_user.id,
+        models.MessageReceipt.status != "read"
+    ).all()
+    
+    if unread_receipts:
+        for r in unread_receipts:
+            r.status = "read"
+            background_tasks.add_task(send_ws_notification, target_user_id, {
+                "type": "receipt_update",
+                "message_id": r.message_id,
+                "status": "read"
+            })
+        db.commit()
     
     return [
         {

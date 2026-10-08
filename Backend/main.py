@@ -24,6 +24,9 @@ from ws_manager import manager
 def read_root():
     return {"status": "Backend is running"}
 
+import json
+from database import SessionLocal
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
     await manager.connect(websocket, client_id)
@@ -31,5 +34,35 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
         while True:
             data = await websocket.receive_text()
             print(f"Received from {client_id}: {data}")
+            
+            try:
+                payload = json.loads(data)
+                if payload.get("type") in ["message_delivered", "message_read"]:
+                    msg_id = payload.get("message_id")
+                    sender_id = payload.get("sender_id")
+                    new_status = payload.get("type").split("_")[1] # 'delivered' or 'read'
+                    
+                    db = SessionLocal()
+                    try:
+                        receipt = db.query(models.MessageReceipt).filter(
+                            models.MessageReceipt.message_id == msg_id,
+                            models.MessageReceipt.user_id == client_id
+                        ).first()
+                        
+                        if receipt:
+                            if new_status == "read" or (new_status == "delivered" and receipt.status == "sent"):
+                                receipt.status = new_status
+                                db.commit()
+                                
+                                await manager.send_personal_message(json.dumps({
+                                    "type": "receipt_update",
+                                    "message_id": msg_id,
+                                    "status": new_status
+                                }), sender_id)
+                    finally:
+                        db.close()
+            except json.JSONDecodeError:
+                pass
+
     except WebSocketDisconnect:
         manager.disconnect(client_id)
