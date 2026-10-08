@@ -1066,29 +1066,35 @@ export default function SignalDashboard() {
                   </div>
                 </div>
 
-                <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
-                  <button style={{ color: 'var(--text-secondary)' }}><Plus size={22} /></button>
-                  <input
-                    type="text"
-                    placeholder="Send a message..."
-                    value={messageText}
-                    onChange={handleTyping}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
-                    disabled={sendingMsg}
-                    style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                  {messageText.trim().length > 0 ? (
-                    <button
-                      onClick={handleSendMessage}
+                {!activeChat.is_removed ? (
+                  <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
+                    <button style={{ color: 'var(--text-secondary)' }}><Plus size={22} /></button>
+                    <input
+                      type="text"
+                      placeholder="Send a message..."
+                      value={messageText}
+                      onChange={handleTyping}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
                       disabled={sendingMsg}
-                      style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(96, 165, 250, 0.1)' }}
-                    >
-                      <Send size={18} />
-                    </button>
-                  ) : (
-                    <button style={{ color: 'var(--text-secondary)' }}><Phone size={20} /></button>
-                  )}
-                </div>
+                      style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                    {messageText.trim().length > 0 ? (
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={sendingMsg}
+                        style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(96, 165, 250, 0.1)' }}
+                      >
+                        <Send size={18} />
+                      </button>
+                    ) : (
+                      <button style={{ color: 'var(--text-secondary)' }}><Phone size={20} /></button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto', color: 'var(--text-secondary)' }}>
+                    You can no longer send messages to this group.
+                  </div>
+                )}
               </div>
             </>
             )

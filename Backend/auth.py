@@ -162,6 +162,15 @@ def send_first_message(req: FirstMessageRequest, background_tasks: BackgroundTas
     
     if str(req.target_user_id).startswith("group_"):
         conv_id = int(str(req.target_user_id).replace("group_", ""))
+        
+        participant = db.query(models.ConversationParticipant).filter(
+            models.ConversationParticipant.conversation_id == conv_id,
+            models.ConversationParticipant.user_id == current_user.id
+        ).first()
+        
+        if not participant or participant.role == "removed":
+            raise HTTPException(status_code=403, detail="You are no longer a member of this group")
+            
         try:
             message = models.Message(sender_id=current_user.id, conversation_id=conv_id, text=req.text)
             db.add(message)
@@ -315,7 +324,8 @@ def get_user_chats(current_user: models.User = Depends(get_current_user), db: Se
                     "avatar_url": None,
                     "last_message": last_msg.text if last_msg else None,
                     "last_message_time": last_msg.created_at.strftime("%H:%M") if last_msg else None,
-                    "_last_msg_obj": last_msg
+                    "_last_msg_obj": last_msg,
+                    "is_removed": p.role == "removed"
                 }
             else:
                 existing_msg = chats_dict[chat_id]["_last_msg_obj"]
@@ -432,7 +442,8 @@ def get_group_members(group_id: int, current_user: models.User = Depends(get_cur
         raise HTTPException(status_code=403, detail="Not a participant")
         
     members = db.query(models.ConversationParticipant).filter(
-        models.ConversationParticipant.conversation_id == group_id
+        models.ConversationParticipant.conversation_id == group_id,
+        models.ConversationParticipant.role != "removed"
     ).all()
     
     return [
@@ -466,7 +477,7 @@ def remove_group_member(group_id: int, user_id: int, background_tasks: Backgroun
         
     try:
         user_name = target_member.user.display_name or target_member.user.username
-        db.delete(target_member)
+        target_member.role = "removed"
         
         msg = models.Message(sender_id=None, conversation_id=group_id, text=f"{user_name} was removed from the group.")
         db.add(msg)

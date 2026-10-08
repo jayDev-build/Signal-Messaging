@@ -69,13 +69,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                             db = SessionLocal()
                             try:
                                 members = db.query(models.ConversationParticipant).filter(models.ConversationParticipant.conversation_id == conv_id).all()
-                                for m in members:
-                                    if m.user_id != client_id:
-                                        await manager.send_personal_message(json.dumps({
-                                            "type": "typing",
-                                            "sender_id": client_id,
-                                            "chat_id": str(target_id)
-                                        }), m.user_id)
+                                is_member = any(m.user_id == client_id for m in members)
+                                if is_member:
+                                    for m in members:
+                                        if m.user_id != client_id:
+                                            await manager.send_personal_message(json.dumps({
+                                                "type": "typing",
+                                                "sender_id": client_id,
+                                                "chat_id": str(target_id)
+                                            }), m.user_id)
                             finally:
                                 db.close()
                         else:
