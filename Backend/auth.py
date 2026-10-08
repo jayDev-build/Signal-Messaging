@@ -1,6 +1,7 @@
 import jwt
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -28,6 +29,10 @@ class ProfileUpdateRequest(BaseModel):
     display_name: str
     avatar_url: Optional[str] = None
     username: Optional[str] = None
+
+class FirstMessageRequest(BaseModel):
+    target_user_id: int
+    text: str
 
 class Token(BaseModel):
     access_token: str
@@ -141,3 +146,65 @@ def search_users(query: str, current_user: models.User = Depends(get_current_use
         }
         for u in results
     ]
+
+async def send_ws_notification(target_user_id: int, payload: dict):
+    from ws_manager import manager
+    await manager.send_personal_message(json.dumps(payload), target_user_id)
+
+@router.post("/message/first")
+def send_first_message(req: FirstMessageRequest, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if req.target_user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot send message to yourself")
+    
+    # Verify the target user exists
+    target_user = db.query(models.User).filter(models.User.id == req.target_user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found")
+        
+    try:
+        # 1. CONTACT: Insert a row in the Contact table mapping current user to target user
+        contact = models.Contact(user_id=current_user.id, contact_user_id=target_user.id)
+        db.add(contact)
+        
+        # 2. CONVERSATION: Create a new Conversation record
+        conversation = models.Conversation(is_group=False)
+        db.add(conversation)
+        db.flush() # Flush to get the generated conversation.id
+        
+        # 3. CONVERSATION_PARTICIPANT: Insert two participant records
+        part1 = models.ConversationParticipant(user_id=current_user.id, conversation_id=conversation.id, role="member")
+        part2 = models.ConversationParticipant(user_id=target_user.id, conversation_id=conversation.id, role="member")
+        db.add(part1)
+        db.add(part2)
+        
+        # 4. MESSAGE: Create the actual Message record
+        message = models.Message(sender_id=current_user.id, conversation_id=conversation.id, text=req.text)
+        db.add(message)
+        db.flush() # Flush to get the generated message.id
+        
+        # 5. MESSAGE_RECEIPT: Create a MessageReceipt record for the TARGET user
+        receipt = models.MessageReceipt(message_id=message.id, user_id=target_user.id, status="sent")
+        db.add(receipt)
+        
+        # Commit the transaction if all steps succeeded
+        db.commit()
+        
+        # Dispatch websocket notification
+        payload = {
+            "type": "new_message",
+            "message": {
+                "id": message.id,
+                "text": message.text,
+                "sender_id": current_user.id,
+                "conversation_id": conversation.id,
+                "sender_name": current_user.display_name or current_user.username
+            }
+        }
+        background_tasks.add_task(send_ws_notification, target_user.id, payload)
+        
+        return {"message": "First message sent successfully", "conversation_id": conversation.id}
+        
+    except Exception as e:
+        # 6. ERROR HANDLING: Rollback the transaction on failure
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create conversation and send message: {str(e)}")

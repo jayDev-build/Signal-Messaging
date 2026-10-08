@@ -20,7 +20,9 @@ import {
   DownloadCloud,
   LogOut,
   Pencil,
-  Filter
+  Filter,
+  Send,
+  Plus
 } from "lucide-react";
 
 export default function SignalDashboard() {
@@ -38,6 +40,10 @@ export default function SignalDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Chat State
+  const [messageText, setMessageText] = useState("");
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   // Mock Active Chat for UI demonstration
   const [activeChat, setActiveChat] = useState<any>(null);
@@ -79,6 +85,38 @@ export default function SignalDashboard() {
     
     fetchProfile();
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/${user.id}`);
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "new_message") {
+          alert(`New message from ${data.message.sender_name}: ${data.message.text}`);
+          setActiveChat(prev => {
+            // Only append if we are currently chatting with the sender
+            if (prev && prev.id === data.message.sender_id) {
+              const newMsg = { text: data.message.text, out: false, time: "Just now" };
+              return {
+                ...prev,
+                messages: prev.messages ? [...prev.messages, newMsg] : [newMsg]
+              };
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error("WS Error:", err);
+      }
+    };
+    
+    return () => {
+      ws.close();
+    };
+  }, [user]);
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -136,6 +174,45 @@ export default function SignalDashboard() {
       alert("An error occurred while saving.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !activeChat) return;
+    
+    setSendingMsg(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://127.0.0.1:8000/auth/message/first", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          target_user_id: activeChat.id,
+          text: messageText.trim()
+        })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || "Failed to send message");
+        return;
+      }
+      
+      // Update UI optimistically
+      const newMsg = { text: messageText.trim(), out: true, time: "Just now" };
+      setActiveChat({
+        ...activeChat,
+        messages: activeChat.messages ? [...activeChat.messages, newMsg] : [newMsg]
+      });
+      setMessageText("");
+    } catch (e) {
+      console.error(e);
+      alert("Error sending message");
+    } finally {
+      setSendingMsg(false);
     }
   };
 
@@ -381,9 +458,27 @@ export default function SignalDashboard() {
                 </div>
 
                 <div className="chat-input-area" style={{ padding: '1rem 2rem', borderTop: '1px solid var(--divider)', display: 'flex', gap: '1rem', alignItems: 'center', background: 'var(--bg-main)', marginTop: 'auto' }}>
-                  <button style={{ color: 'var(--text-secondary)' }}><User size={20} /></button>
-                  <input type="text" placeholder="Send a message..." style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }} />
-                  <button style={{ color: 'var(--text-secondary)' }}><Phone size={20} /></button>
+                  <button style={{ color: 'var(--text-secondary)' }}><Plus size={22} /></button>
+                  <input 
+                    type="text" 
+                    placeholder="Send a message..." 
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
+                    disabled={sendingMsg}
+                    style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '20px', border: 'none', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', outline: 'none' }} 
+                  />
+                  {messageText.trim().length > 0 ? (
+                    <button 
+                      onClick={handleSendMessage}
+                      disabled={sendingMsg}
+                      style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(96, 165, 250, 0.1)' }}
+                    >
+                      <Send size={18} />
+                    </button>
+                  ) : (
+                    <button style={{ color: 'var(--text-secondary)' }}><Phone size={20} /></button>
+                  )}
                 </div>
               </div>
             </>
